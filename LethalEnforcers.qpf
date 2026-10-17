@@ -1,0 +1,4 @@
+QUARTUS_VERSION = "17.0"
+# LethalEnforcers_stp is the instrumented revision (ISSP probes, OSD debug page); LethalEnforcers the release.
+PROJECT_REVISION = "LethalEnforcers_stp"
+PROJECT_REVISION = "LethalEnforcers"
