@@ -1,0 +1,2 @@
+rtl/video/lethal_tilemap.sv
+sim/tilemap_tb/tb_tilemap.sv

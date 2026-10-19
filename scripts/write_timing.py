@@ -41,6 +41,7 @@ def run(game, skip, frames, coin=0, tag="", extra=""):
     env = dict(os.environ, **lua_env(r), **lua_runner_env("wtiming.lua"),
                WT_OUT=out.as_posix(), WT_TAPS=taps,
                WT_SKIP=str(skip), WT_FRAMES=str(frames), WT_COIN=str(coin), WT_SNAP="1",
+               WT_COINS=str(inp.get("coins", 1)),
                WT_IN_COIN=inp.get("coin", "Coin 1"), WT_IN_START=inp.get("start", "1 Player Start"),
                WT_IN_HOLD=inp.get("hold", "P1 Right"), WT_IN_PULSE=inp.get("pulse", "P1 Button 1"))
     cmd = mame_cmd(exe, game, "wtiming.lua", mame_dir,

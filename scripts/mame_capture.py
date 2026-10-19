@@ -64,9 +64,18 @@ def regions():
 
 
 def spec(table, names=None):
-    """{"name": [lo, hi]} -> "name:lo:hi,..." for the Lua side."""
-    return ",".join(f"{n}:{int(lo, 16):x}:{int(hi, 16):x}"
-                    for n, (lo, hi) in table.items() if names is None or n in names)
+    """{"name": [lo, hi]} or {"name": [lo, hi, device]} -> "name:lo:hi[@device],..." for Lua.
+
+    A third element names the device whose "program" space holds the range, for
+    memory behind a bank device rather than in the main CPU's own space."""
+    out = []
+    for n, v in table.items():
+        if names is not None and n not in names:
+            continue
+        lo, hi = v[0], v[1]
+        dev = f"@{v[2]}" if len(v) > 2 else ""
+        out.append(f"{n}:{int(lo, 16):x}:{int(hi, 16):x}{dev}")
+    return ",".join(out)
 
 
 def lua_env(r):

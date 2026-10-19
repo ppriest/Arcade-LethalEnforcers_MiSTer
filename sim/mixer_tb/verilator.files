@@ -1,0 +1,2 @@
+rtl/video/lethal_mixer.sv
+sim/mixer_tb/tb_mixer.sv

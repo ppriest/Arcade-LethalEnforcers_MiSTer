@@ -98,3 +98,6 @@ releases/*.rbf
 **/.DS_Store
 __pycache__/
 *.pyc
+
+# Build product of tools/jtframe/build.sh
+tools/jtframe/jtframe.exe

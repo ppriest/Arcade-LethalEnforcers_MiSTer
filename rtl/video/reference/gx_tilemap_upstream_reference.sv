@@ -1,0 +1,570 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+//
+// Konami GX tilemaps: the K054156 register file and the K056832 tile fetch,
+// as a line renderer. Four layers, 16 VRAM pages, 5, 6 or 8 bpp (tile_bpp).
+//
+// WRITTEN FROM THE SOFTWARE MODEL, NOT PORTED. scripts/render_model.py
+// layer_fields() is the specification and scripts/check_gx_tilemap.py the
+// test: sim/gx_tilemap_tb renders captured frames and every pixel's colour
+// field and pixel value must equal the model's. jotego's jt05415x (vendored
+// beside this in k056832/) was the planned base and is not used here, because
+// (1) it addresses 4 VRAM pages, as Moo Mesa's 24 KB of SRAM does, where GX
+// uses all 16 -- daiskiss puts layer C at page row 2 and layer B at page
+// column 2; (2) it outputs tile-ROM addresses, the pixel path being in each
+// game's own video module; (3) its register outputs keep 11/12 bits of the
+// scroll registers, where MAME uses all 16 and the two differ whenever a
+// layer is not a power of two tall (rowspan 3, 768 rows).
+//
+// OUTPUT, per layer per pixel: { colour[5:0], pixel[7:0] }. The K055555 adds
+// the palette base (PALBASE_A..D << 6); pixel 0 is transparent.
+//
+// COORDINATES are MAME's bitmap coordinates: a line is rendered for bitmap
+// row line_y, for bitmap columns 24..311 (set_visarea(24, 24+288-1, ...)).
+// Mapping the K053252's counters onto those is the video top level's job.
+//
+// NOT HANDLED, and flagged on `unsupported` rather than drawn wrong: screen
+// flip X (m_regs[0] bit 4). Flip Y (bit 5) is drawn unflipped: the sets that
+// set it (le2u, le2j) are ones MAME turns back with ORIENTATION_FLIP_Y, and
+// the result is the unflipped rendering (gx_video).
+//
+// ONE LINE BUFFER PAIR: line_start renders into one half and flips which half
+// rd_x reads, so the previous line is readable while the next renders.
+
+module gx_tilemap (
+    input               clk,
+    input               rst,
+
+    // K054156 registers, 0xd40000-0xd4003f: word_w, big-endian byte enables
+    input               reg_we,
+    input        [4:0]  reg_addr,
+    input       [15:0]  reg_din,
+    input        [1:0]  reg_be,          // [1] = bits 15:8, [0] = bits 7:0
+
+    // GX tile bank registers, 0xd44000-0xd44007 (m_gx_tilebanks)
+    input               tbank_we,
+    input        [2:0]  tbank_addr,
+    input        [7:0]  tbank_din,
+
+    // VRAM, by word: { page[3:0], word[11:0] }. Word 2t of a page is tile
+    // t's attribute, word 2t+1 its code. A read is a vram_rd strobe; the
+    // word is on vram_dout two clock edges later and stays there.
+    input               vram_we,
+    input               vram_rd,
+    input       [15:0]  vram_addr,
+    input       [15:0]  vram_din,
+    input        [1:0]  vram_be,
+    output reg  [15:0]  vram_dout,
+
+    // per-game K056832 set_layer_offs(layer, x, y)
+    input  signed [7:0] offs_x [4],
+    input  signed [7:0] offs_y [4],
+
+    // render
+    input               line_start,
+    input        [9:0]  line_y,
+    output              busy,
+    output reg          unsupported,
+    output      [15:0]  dbg_regs5,   // register 0x0a (line-scroll modes), for the probe
+    // a clock per tile row: { skipped, fetched and transparent, fetched }
+    // (the line-time probe)
+    output reg  [ 2:0]  dbg_ev,
+    input               blank_skip,  // answer a repeat of the last transparent row without the ROM
+    // the bank the CPU's ROM readback window reads through (k056832's
+    // m_cur_gfx_banks: registers 0x1a and 0x1b)
+    output      [31:0]  gfx_bank,
+
+    // tile ROM, one pixel row per address: row = code * 8 + y. The row's
+    // bytes in MAME's order, byte 0 in [63:56]; 5 bpp uses bytes 0-4, 6 bpp
+    // 0-5, 8 bpp all eight (K056832 set_config's BPP_5, BPP_6, BPP_8)
+    input        [1:0]  tile_bpp,        // 0: 5 bpp, 1: 6 bpp, 2: 8 bpp
+    output reg  [23:0]  rom_addr,
+    output reg          rom_cs,
+    input               rom_ok,
+    input       [63:0]  rom_data,
+    // the Type 3/4 build's second tile ROM client (the fetcher keeps two rows
+    // in flight there); idle in the other build
+    output reg  [23:0]  rom2_addr,
+    output reg          rom2_cs,
+    input               rom2_ok,
+    input       [63:0]  rom2_data,
+
+    // the visible window's first bitmap column and width (24 and 288 on
+    // most sets; dragoonj 40 and 384, winspike 24 and 384)
+    input        [9:0]  vis_x0,
+    input        [9:0]  vis_w,
+
+    // line buffer read: bitmap column vis_x0 + rd_x, one cycle latency
+    input        [9:0]  rd_x,
+    output      [13:0]  rd_pix [4]
+);
+
+wire [9:0] VIS_X0 = vis_x0;
+wire [9:0] VIS_W  = vis_w;
+// a line buffer's width: 576 columns in the Type 3/4 build (12 MHz dots)
+`ifdef GX_T34
+localparam LB = 10;
+`else
+localparam LB = 9;
+`endif
+
+// ------------------------------------------------------------ registers ---
+reg [15:0] regs [32];
+(* ramstyle = "logic" *) reg [ 7:0] tbank [8];   // read combinationally
+
+always @(posedge clk) begin
+    if (reg_we) begin
+        if (reg_be[1]) regs[reg_addr][15:8] <= reg_din[15:8];
+        if (reg_be[0]) regs[reg_addr][ 7:0] <= reg_din[ 7:0];
+    end
+    if (tbank_we) tbank[tbank_addr] <= tbank_din;
+end
+
+// -------------------------------------------------------------- render ---
+// Per layer: SETUP..PREP work out where the line starts in the layer's map,
+// then RUN keeps two things going at once -- a fetcher reading one tile at a
+// time (VRAM entry, then its pixel row from ROM) into a one-tile buffer, and
+// an emitter writing one pixel a cycle from the tile before it. A tile costs
+// the fetcher about 5 cycles plus the ROM latency, so with a ROM answering in
+// 3 cycles or fewer the emitter never waits after the first tile; beyond
+// that the line time is set by the ROM.
+typedef enum logic [3:0] { IDLE, SETUP, MOD_Y, FIX_Y, LS_RD, LS_Q, PREP, RUN } state_t;
+typedef enum logic [2:0] { F_IDLE, F_VWAIT, F_VDATA, F_RWAIT, F_HOLD } fstate_t;
+state_t  st;
+fstate_t fst;
+
+wire [15:0] r_ctrl   = regs[0];
+wire [15:0] r_flipen = regs[1];
+wire [15:0] r_attr   = regs[3];
+wire [15:0] r_scroll = regs[5];           // 0x0a: two bits a layer
+assign dbg_regs5 = r_scroll;
+assign gfx_bank  = { regs[27], regs[26] };
+wire [15:0] r_lsbank = regs[24];          // 0x30: the line-scroll VRAM page
+
+
+reg  [ 1:0] layer;
+reg  [ 9:0] y;
+reg  [11:0] height;          // rowspan * 256
+reg  [11:0] ly;              // the map row this line draws (my, before PREP)
+reg  [11:0] width;           // colspan * 512
+
+// Line scroll (k054156_k054157_k056832.cpp): register 0x0a gives each layer a
+// mode -- 0 per line, 2 per eight lines, 3 none -- and the words live in the
+// page register 0x30 selects, 0x400 words per layer, two words a line with
+// the scroll in the second. It is source-oriented: the word belongs to the
+// line of the MAP, whatever the Y scroll is, and it replaces the layer's X
+// scroll register (the global one is ignored).
+//
+// One VRAM entry is those two words (attribute half, code half), so a line's
+// pair is one read at tile index layer * 0x200 + row, and the scroll is the
+// code half.
+wire [ 1:0] ls_mode  = r_scroll[{layer, 1'b0} +: 2];
+wire        ls_on    = ls_mode == 2'd0 || ls_mode == 2'd2;
+wire [ 3:0] ls_page  = { r_lsbank[4:3], r_lsbank[1:0] };
+reg  [15:0] ls_x;                         // this line's scroll, when ls_on
+reg  [ 1:0] rowstart, colstart;
+reg  [19:0] modv;            // |dy - offs_y|, reduced in place
+reg         modneg;
+reg  [ 2:0] modk;
+reg  [11:0] ay, my;
+reg  [31:0] scan_q;          // the tile's VRAM entry, captured in F_VWAIT
+
+wire [15:0] l_ysc  = regs[16 + layer];
+wire [15:0] l_xsc  = regs[20 + layer];
+wire [15:0] l_rows = regs[8 + layer];
+wire [15:0] l_cols = regs[12 + layer];
+
+// Attribute decode, selected by m_regs[3] bits 6-7: where the two flip bits
+// sit and how the six colour bits are assembled.
+reg  [3:0] flips;
+reg  [5:0] palm1, palm2;
+reg  [1:0] pals2;
+always @* begin
+    case (r_attr[7:6])
+        2'd0:    begin flips = 4'd6; palm1 = 6'h3f; pals2 = 2'd0; palm2 = 6'h00; end
+        2'd1:    begin flips = 4'd4; palm1 = 6'h0f; pals2 = 2'd2; palm2 = 6'h30; end
+        2'd2:    begin flips = 4'd2; palm1 = 6'h03; pals2 = 2'd2; palm2 = 6'h3c; end
+        default: begin flips = 4'd0; palm1 = 6'h00; pals2 = 2'd2; palm2 = 6'h3f; end
+    endcase
+end
+
+wire [15:0] attr    = scan_q[31:16];
+wire [15:0] code    = scan_q[15:0];
+wire [15:0] attr_sh = attr >> pals2;
+wire [ 1:0] t_flip  = attr[flips +: 2] & r_flipen[{layer, 1'b0} +: 2];
+wire [ 5:0] t_col   = (attr[5:0] & palm1) | (attr_sh[5:0] & palm2);
+wire [20:0] t_code  = { tbank[code[15:13]], code[12:0] };    // type2_tile_callback
+wire [ 2:0] t_y     = t_flip[1] ? ~my[2:0] : my[2:0];
+
+// MAME: ay = (dy - offs_y) % height with dy = (int16_t)m_regs[0x10+layer],
+// and sx = (dx - offs_x) & (width - 1)
+wire signed [16:0] ydiff = $signed({l_ysc[15], l_ysc}) - $signed({{9{offs_y[layer][7]}}, offs_y[layer]});
+wire        [15:0] xdiff = (ls_on ? ls_x : l_xsc) - {{8{offs_x[layer][7]}}, offs_x[layer]};
+wire        [11:0] sx    = xdiff[11:0] & (width - 12'd1);
+wire        [11:0] ysum  = {2'd0, y} + ay;
+wire        [11:0] xsum  = {2'd0, VIS_X0} + sx;
+// my = (y + ay) % height and mx = (24 + sx) % width: each sum is less than
+// twice its modulus
+wire        [11:0] mx0   = xsum >= width ? xsum - width : xsum;
+
+// fetcher
+reg  [11:0] fmx;             // map column of the tile being fetched
+reg  [ 6:0] fleft;           // tiles still to fetch on this layer (73 at 576 wide)
+reg  [ 2:0] ftx;
+reg  [ 5:0] fcol;
+reg  [ 1:0] fflip;
+reg  [63:0] frow;
+wire [11:0] fnext = {fmx[11:3], 3'd0} + 12'd8;
+
+// Two tile rows in flight on two ROM clients: the Type 3/4 build's 576
+// columns, and Type 1, whose terrain shares the graphics port
+`ifdef GX_T34
+`define GX_TM2
+`elsif GX_T1
+`define GX_TM2
+`endif
+
+`ifdef GX_TM2
+// At 12 MHz dots a line is 576 columns: 4 x 73 tiles in 3,072 clocks, where a
+// tile row from SDRAM takes about ten (sim/gx_tilemap_tb: 3,050 a line at a
+// 10-clock ROM with one fetch at a time, 3,394 at 14). So the VRAM reads go on
+// while two rows are fetched, one on each ROM client, into two slots taken in
+// turn, and the emitter is given them in the order they were read.
+reg  [ 1:0] s_busy, s_done;
+reg  [23:0] s_key  [2];
+reg  [63:0] s_row  [2];
+reg  [ 5:0] s_col  [2];
+reg  [ 1:0] s_flip [2];
+reg  [ 2:0] s_tx   [2];
+reg         s_iss, s_ret;            // the slot filled next, the slot retired next
+function automatic blank_of( input [63:0] d );
+    blank_of = tile_bpp == 2'd2 ? d == 64'd0 :
+               tile_bpp == 2'd1 ? d[63:16] == 48'd0 : d[63:24] == 40'd0;
+endfunction
+`endif
+
+// one-tile buffer between fetcher and emitter
+reg         nb_valid;
+reg  [63:0] nb_row;
+reg  [ 5:0] nb_col;
+reg  [ 1:0] nb_flip;
+reg  [ 2:0] nb_tx;
+
+// emitter
+reg         e_valid;
+reg  [ 9:0] px;
+reg  [ 2:0] tx;
+reg  [ 1:0] flip;
+reg  [ 5:0] colour;
+reg  [63:0] row;
+
+// The pixel at tx of the emitter's row. MAME's bit order is MSB first within
+// each byte, and the planes, most significant first, are the charlayouts'
+// bit offsets / 8 (k054156_k054157_k056832.cpp), b0 being the row's first
+// byte:
+//   charlayout5 { 32, 24, 8, 16, 0 }             { b4, b3, b1, b2, b0 }
+//   charlayout6 { 40, 32, 24, 8, 16, 0 }         { b5, b4, b3, b1, b2, b0 }
+//   charlayout8 { 56, 24, 40, 8, 48, 16, 32, 0 } { b7, b3, b5, b1, b6, b2, b4, b0 }
+wire [2:0] bitsel = flip[0] ? tx : ~tx;
+wire [7:0] b0 = row[63:56], b1 = row[55:48], b2 = row[47:40], b3 = row[39:32],
+           b4 = row[31:24], b5 = row[23:16], b6 = row[15:8],  b7 = row[7:0];
+wire [7:0] pixel = tile_bpp == 2'd2 ? { b7[bitsel], b3[bitsel], b5[bitsel], b1[bitsel],
+                                        b6[bitsel], b2[bitsel], b4[bitsel], b0[bitsel] } :
+                   tile_bpp == 2'd1 ? { 2'd0, b5[bitsel], b4[bitsel], b3[bitsel],
+                                        b1[bitsel], b2[bitsel], b0[bitsel] } :
+                                      { 3'd0, b4[bitsel], b3[bitsel], b1[bitsel], b2[bitsel], b0[bitsel] };
+
+wire last_px  = e_valid && px == VIS_W - 10'd1;
+wire tile_end = e_valid && tx == 3'd7 && !last_px;
+wire nb_take  = nb_valid && (!e_valid || tile_end);
+wire nb_free  = !nb_valid || nb_take;
+
+// ------------------------------------------------------ VRAM, line buffers ---
+// VRAM: 16 pages x 2048 tiles x { attr, code }, 1 Mbit, as four byte-lane
+// RAMs of 32K x 8. One write port (CPU) and ONE read port, shared: a CPU
+// read takes it for a cycle and the fetcher waits. With a second read port
+// Quartus 17 duplicated every lane (2 Mbit), and a single packed [3:0][7:0]
+// array with byte enables was not inferred at all (276007).
+// The CPU writes half an entry, so its two byte enables land on lanes 3:2
+// (attribute) or 1:0 (code).
+// entry = page * 2048 + tile, page = ((rowstart + my / 256) & 3) * 4
+//                                   + ((colstart + mx / 512) & 3)
+wire [14:0] tile_addr = { 2'(rowstart + my[9:8]), 2'(colstart + fmx[10:9]), my[7:3], fmx[8:3] };
+wire        scan_rd   = st == RUN && fst == F_IDLE && fleft != 6'd0 && !vram_rd;
+// the line's scroll pair: page, then layer * 0x200 + the map row (mode 2
+// takes the row's group of eight), wrapping at 512 rows as MAME's mask does.
+// A layer one page tall reads it at the line plus dy itself, not the map row
+// (tilemap_draw_common's sdat_start = dy): salmndr2's dy 0x100 is the second
+// half of the table
+wire [11:0] ls_row    = ysum >= height ? ysum - height : ysum;   // this line's map row
+wire [ 8:0] ls_line   = l_rows[1:0] == 2'd0 ? 9'(y) + l_ysc[8:0] : ls_row[8:0];
+wire [14:0] ls_addr   = { ls_page, layer, ls_mode == 2'd2 ? { ls_line[8:3], 3'd0 } : ls_line };
+wire        ls_rd     = st == LS_RD && !vram_rd;
+wire [14:0] rd_addr   = vram_rd    ? vram_addr[15:1] :
+                        ls_rd      ? ls_addr         : tile_addr;
+wire [ 3:0] vram_be4  = vram_addr[0] ? {2'b00, vram_be} : {vram_be, 2'b00};
+wire [31:0] ram_q;
+reg         cpu_rd_l, cpu_half;
+
+genvar b;
+generate for (b = 0; b < 4; b++) begin : g_vram
+    gx_sdpram #(.AW(15), .DW(8)) u_lane (
+        .clk ( clk ),
+        .we  ( vram_we && vram_be4[b] ),
+        .wa  ( vram_addr[15:1] ),
+        .d   ( (b % 2) ? vram_din[15:8] : vram_din[7:0] ),
+        .ra  ( rd_addr ),
+        .q   ( ram_q[b*8 +: 8] )
+    );
+end endgenerate
+
+always @(posedge clk) begin
+    cpu_rd_l <= vram_rd;
+    cpu_half <= vram_addr[0];
+    if (cpu_rd_l) vram_dout <= cpu_half ? ram_q[15:0] : ram_q[31:16];
+end
+
+// Line buffers: one RAM per layer, two lines of 512 (1024 in the Type 3/4
+// build: 576 used).
+reg        wr_half;
+reg        lb_we;
+reg [ 1:0] lb_layer;
+reg [ 9:0] lb_px;
+reg [13:0] lb_din;
+
+genvar l;
+generate for (l = 0; l < 4; l++) begin : g_lbuf
+    gx_sdpram #(.AW(LB+1), .DW(14)) u_lbuf (
+        .clk ( clk ),
+        .we  ( lb_we && lb_layer == l ),
+        .wa  ( {wr_half, lb_px[LB-1:0]} ),
+        .d   ( lb_din ),
+        .ra  ( {~wr_half, rd_x[LB-1:0]} ),
+        .q   ( rd_pix[l] )
+    );
+end endgenerate
+
+assign busy = st != IDLE;
+
+// Blank rows. A text layer's empty area is mostly one blank tile, so each
+// layer keeps the ROM address of the last row it fetched that came back
+// transparent (every byte the depth uses 0), and a tile whose row has that
+// address skips the ROM: fewer requests on the graphics port the sprites
+// share. The row is then all zeros, which draws what the ROM's would.
+wire        row_blank = tile_bpp == 2'd2 ? rom_data == 64'd0 :
+                        tile_bpp == 2'd1 ? rom_data[63:16] == 48'd0 : rom_data[63:24] == 40'd0;
+wire [23:0] f_key     = { t_code, t_y };
+reg  [23:0] blank_key [4];
+reg  [ 3:0] blank_kv;
+wire        f_skip    = blank_skip && blank_kv[layer] && blank_key[layer] == f_key;
+
+always @(posedge clk) begin
+    lb_we  <= 1'b0;
+    dbg_ev <= 3'd0;
+    if (rst) begin
+        blank_kv    <= 4'd0;
+        st          <= IDLE;
+        fst         <= F_IDLE;
+        wr_half     <= 1'b0;
+        rom_cs      <= 1'b0;
+        nb_valid    <= 1'b0;
+        e_valid     <= 1'b0;
+        fleft       <= 6'd0;
+        unsupported <= 1'b0;
+        rom2_cs     <= 1'b0;
+`ifdef GX_TM2
+        s_busy      <= 2'b00;
+        s_done      <= 2'b00;
+        s_iss       <= 1'b0;
+        s_ret       <= 1'b0;
+`endif
+    end else case (st)
+        IDLE: if (line_start) begin
+            wr_half <= ~wr_half;
+            y       <= line_y;
+            layer   <= 2'd0;
+            st      <= SETUP;
+            // Mode 1 is "unused/unknown" in the chip's documentation, but Crazy
+            // Cross sets it on all four layers, and MAME's switch takes 1 and 3
+            // through the same default case: no line scroll, the layer's own
+            // X/Y scroll registers. ls_on already reads it that way.
+            if (r_ctrl[4]) unsupported <= 1'b1;
+        end
+        SETUP: begin
+            rowstart <= l_rows[4:3];
+            colstart <= l_cols[4:3];
+            height   <= { 1'b0, {1'b0, l_rows[1:0]} + 3'd1, 8'd0 };
+            width    <= { {1'b0, l_cols[1:0]} + 3'd1, 9'd0 };
+            modneg   <= ydiff < 0;
+            modv     <= ydiff < 0 ? 20'(-ydiff) : 20'(ydiff);
+            modk     <= 3'd7;
+            st       <= MOD_Y;
+        end
+        // |dy - offs_y| mod height by restoring subtraction of height << 7..0:
+        // |dy - offs_y| < 2^16 <= height << 8, so eight steps reduce it fully
+        MOD_Y: begin
+            if (modv >= (20'(height) << modk)) modv <= modv - (20'(height) << modk);
+            modk <= modk - 3'd1;
+            if (modk == 3'd0) st <= FIX_Y;
+        end
+        FIX_Y: begin
+            ay <= (modneg && modv != 0) ? height - modv[11:0] : modv[11:0];
+            st <= LS_RD;
+        end
+        // the line's scroll word, for a layer that has one
+        LS_RD: begin
+            ly <= ls_row;
+            if (!ls_on) st <= PREP;
+            else if (ls_rd) st <= LS_Q;
+        end
+        LS_Q: begin
+            ls_x <= ram_q[15:0];
+            st   <= PREP;
+        end
+        PREP: begin
+            my    <= ly;
+            fmx   <= mx0;
+            fleft <= 7'((11'(mx0[2:0]) + 11'(VIS_W) + 11'd7) >> 3);   // tiles the VIS_W pixels touch
+            px    <= 10'd0;
+            st    <= RUN;
+        end
+        RUN: begin
+            // ---- fetcher
+`ifndef GX_TM2
+            case (fst)
+                F_IDLE: if (scan_rd) fst <= F_VWAIT;
+                F_VWAIT: begin
+                    scan_q <= ram_q;
+                    fst    <= F_VDATA;
+                end
+                F_VDATA: begin
+                    fflip    <= t_flip;
+                    fcol     <= t_col;
+                    ftx      <= fmx[2:0];
+                    rom_addr <= f_key;
+                    fmx      <= fnext == width ? 12'd0 : fnext;
+                    fleft    <= fleft - 6'd1;
+                    if (f_skip) begin
+                        frow   <= 64'd0;
+                        dbg_ev <= 3'b100;
+                        fst    <= F_HOLD;
+                    end else begin
+                        rom_cs <= 1'b1;
+                        fst    <= F_RWAIT;
+                    end
+                end
+                F_RWAIT: if (rom_ok) begin
+                    frow   <= rom_data;
+                    rom_cs <= 1'b0;
+                    dbg_ev <= { 1'b0, row_blank, 1'b1 };
+                    if (row_blank) begin
+                        blank_key[layer] <= rom_addr;
+                        blank_kv[layer]  <= 1'b1;
+                    end
+                    fst    <= F_HOLD;
+                end
+                F_HOLD: if (nb_free) fst <= F_IDLE;
+                default: fst <= F_IDLE;
+            endcase
+
+            // ---- buffer
+            if (fst == F_HOLD && nb_free) begin
+                nb_valid <= 1'b1;
+                nb_row   <= frow;
+                nb_col   <= fcol;
+                nb_flip  <= fflip;
+                nb_tx    <= ftx;
+            end else if (nb_take) nb_valid <= 1'b0;
+
+`else
+            // VRAM, then the row into the next slot (a ROM client of its own)
+            case (fst)
+                F_IDLE: if (scan_rd) fst <= F_VWAIT;
+                F_VWAIT: begin
+                    scan_q <= ram_q;
+                    fst    <= F_VDATA;
+                end
+                F_VDATA: if (!s_busy[s_iss]) begin
+                    s_busy[s_iss] <= 1'b1;
+                    s_key[s_iss]  <= f_key;
+                    s_col[s_iss]  <= t_col;
+                    s_flip[s_iss] <= t_flip;
+                    s_tx[s_iss]   <= fmx[2:0];
+                    fmx      <= fnext == width ? 12'd0 : fnext;
+                    fleft    <= fleft - 6'd1;
+                    if (f_skip) begin
+                        s_row[s_iss]  <= 64'd0;
+                        s_done[s_iss] <= 1'b1;
+                        dbg_ev        <= 3'b100;
+                    end else if (!s_iss) begin
+                        rom_addr <= f_key; rom_cs <= 1'b1;
+                    end else begin
+                        rom2_addr <= f_key; rom2_cs <= 1'b1;
+                    end
+                    s_iss <= ~s_iss;
+                    fst   <= F_IDLE;
+                end
+                default: fst <= F_IDLE;
+            endcase
+            if (rom_cs && rom_ok) begin
+                rom_cs <= 1'b0; s_row[0] <= rom_data; s_done[0] <= 1'b1;
+                dbg_ev <= { 1'b0, blank_of(rom_data), 1'b1 };
+                if (blank_of(rom_data)) begin blank_key[layer] <= s_key[0]; blank_kv[layer] <= 1'b1; end
+            end
+            if (rom2_cs && rom2_ok) begin
+                rom2_cs <= 1'b0; s_row[1] <= rom2_data; s_done[1] <= 1'b1;
+                if (blank_of(rom2_data)) begin blank_key[layer] <= s_key[1]; blank_kv[layer] <= 1'b1; end
+            end
+
+            // ---- buffer: the slots in the order they were filled
+            if (s_done[s_ret] && nb_free) begin
+                nb_valid <= 1'b1;
+                nb_row   <= s_row[s_ret];
+                nb_col   <= s_col[s_ret];
+                nb_flip  <= s_flip[s_ret];
+                nb_tx    <= s_tx[s_ret];
+                s_busy[s_ret] <= 1'b0;
+                s_done[s_ret] <= 1'b0;
+                s_ret    <= ~s_ret;
+            end else if (nb_take) nb_valid <= 1'b0;
+`endif
+
+            // ---- emitter
+            if (e_valid) begin
+                lb_we    <= 1'b1;
+                lb_layer <= layer;
+                lb_px    <= px;
+                lb_din   <= { colour, pixel };
+                px       <= px + 10'd1;
+                tx       <= tx + 3'd1;
+            end
+            if (nb_take) begin
+                e_valid <= 1'b1;
+                row     <= nb_row;
+                colour  <= nb_col;
+                flip    <= nb_flip;
+                tx      <= nb_tx;
+            end else if (tile_end) e_valid <= 1'b0;
+
+            if (last_px) begin
+                e_valid <= 1'b0;
+                layer   <= layer + 2'd1;
+                st      <= layer == 2'd3 ? IDLE : SETUP;
+            end
+        end
+        default: st <= IDLE;
+    endcase
+end
+
+`ifdef SIMULATION
+// every tile fetched for a layer must have been emitted when it ends
+`ifdef GX_TM2
+always @(posedge clk) if (st == RUN && last_px && (fleft != 0 || nb_valid || fst != F_IDLE || s_busy != 0))
+`else
+always @(posedge clk) if (st == RUN && last_px && (fleft != 0 || nb_valid || fst != F_IDLE))
+`endif
+    $error("gx_tilemap: layer %0d ended with fetches outstanding", layer);
+`endif
+
+endmodule
+
+`undef GX_TM2

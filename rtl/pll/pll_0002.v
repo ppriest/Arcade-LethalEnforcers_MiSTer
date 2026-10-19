@@ -7,8 +7,14 @@ module  pll_0002(
 	// interface 'reset'
 	input wire rst,
 
-	// interface 'outclk0'
+	// interface 'outclk0' -- clk_sys, 48 MHz: 8 x the 6 MHz pixel clock, 3 x the 68000's 16 MHz
+	// (docs/ROADMAP.md, Clocks)
 	output wire outclk_0,
+
+	// interface 'outclk1' -- SDRAM_CLK, the same 48 MHz lagging by 5555 ps: jtframe's own MiSTer PLL for
+	// jtframe_sdram64 at 48 MHz (jtcores modules/jtframe/target/mister/hdl/sys/pll/pll_0002.v), inside
+	// the 3.5-8.0 ns jotego measured as working on every module he swept (jtframe doc/sdram.md)
+	output wire outclk_1,
 
 	// interface 'locked'
 	output wire locked
@@ -18,12 +24,12 @@ module  pll_0002(
 		.fractional_vco_multiplier("false"),
 		.reference_clock_frequency("50.0 MHz"),
 		.operation_mode("direct"),
-		.number_of_clocks(1),
-		.output_clock_frequency0("20.000000 MHz"),
+		.number_of_clocks(2),
+		.output_clock_frequency0("48.000000 MHz"),
 		.phase_shift0("0 ps"),
 		.duty_cycle0(50),
-		.output_clock_frequency1("0 MHz"),
-		.phase_shift1("0 ps"),
+		.output_clock_frequency1("48.000000 MHz"),
+		.phase_shift1("5555 ps"),
 		.duty_cycle1(50),
 		.output_clock_frequency2("0 MHz"),
 		.phase_shift2("0 ps"),
@@ -77,7 +83,7 @@ module  pll_0002(
 		.pll_subtype("General")
 	) altera_pll_i (
 		.rst	(rst),
-		.outclk	({outclk_0}),
+		.outclk	({outclk_1, outclk_0}),
 		.locked	(locked),
 		.fboutclk	( ),
 		.fbclk	(1'b0),

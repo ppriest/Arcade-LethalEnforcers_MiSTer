@@ -22,6 +22,7 @@ WHAT IS PARSED, and what each contributes:
     PORT_DIPNAME(mask, default, name)   a user-visible switch
     PORT_DIPSETTING(value, label)       one of its settings
     PORT_DIPUNUSED_DIPLOC(mask, dflt)   NOT emitted, but its default IS kept
+    PORT_DIPUNKNOWN_DIPLOC(mask, dflt)  the same
     PORT_SERVICE_DIPLOC(mask, dflt)     the standard Service Mode switch
     PORT_BIT(mask, ...)                 ignored; it is a control, not a switch
 
@@ -246,7 +247,9 @@ def parse_ports(body, all_blocks, missing, depth=0):
             continue
 
         # Not emitted as a switch, but its default is part of the byte.
-        m = re.match(rf'PORT_DIPUNUSED(?:_DIPLOC)?\(\s*{_NUM}\s*,\s*{_NUM}',
+        # PORT_DIPUNKNOWN likewise: MAME lists it as Unknown Off/On, but no setting
+        # is known to do anything (lethal.cpp's Japanese set)
+        m = re.match(rf'PORT_DIP(?:UNUSED|UNKNOWN)(?:_DIPLOC)?\(\s*{_NUM}\s*,\s*{_NUM}',
                      line)
         if m:
             ports[cur].append(("(unused)", _num(m.group(1)), _num(m.group(2)), None))

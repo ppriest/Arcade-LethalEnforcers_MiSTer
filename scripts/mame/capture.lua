@@ -54,9 +54,11 @@ end
 local function ranges(s)
     local out = {}
     for spec in string.gmatch(s or "", "([^,]+)") do
-        local name, lo, hi = spec:match("^([^:]+):(%x+):(%x+)$")
+        -- name:lo:hi, or name:lo:hi@<device> for a range in that device's program space
+        local name, lo, hi, dev = spec:match("^([^:]+):(%x+):(%x+)@?(.*)$")
         assert(name, "bad range spec: " .. spec)
-        out[#out + 1] = { name = name, lo = tonumber(lo, 16), hi = tonumber(hi, 16) }
+        out[#out + 1] = { name = name, lo = tonumber(lo, 16), hi = tonumber(hi, 16),
+                          dev = (dev ~= "" and dev or nil) }
     end
     return out
 end
@@ -66,6 +68,12 @@ end
 core_subs = {}
 
 local sp = m.devices[os.getenv("CORE_CPU") or ":maincpu"].spaces[os.getenv("CORE_SPACE") or "program"]
+local function space_of(r)
+    if not r.dev then return sp end
+    local d = m.devices[r.dev]
+    assert(d, "no device " .. r.dev)
+    return d.spaces["program"]
+end
 
 -- Split a tap's data by the mask actually driven, not by an assumed width.
 local function note(tbl, base, addr, data, mask)
@@ -81,15 +89,15 @@ local regs = {}
 local WTAP = ranges(os.getenv("CORE_WTAP"))
 for _, r in ipairs(WTAP) do
     regs[r.name] = {}
-    core_subs[#core_subs + 1] = sp:install_write_tap(r.lo, r.hi, "core_" .. r.name,
+    core_subs[#core_subs + 1] = space_of(r):install_write_tap(r.lo, r.hi, "core_" .. r.name,
         guard("tap_" .. r.name, function(offset, data, mask)
             note(regs[r.name], r.lo, offset, data, mask)
         end))
 end
 
-local function read_block(lo, hi)
+local function read_block(lo, hi, s)
     local t = {}
-    for a = lo, hi do t[#t + 1] = string.char(sp:read_u8(a)) end
+    for a = lo, hi do t[#t + 1] = string.char(s:read_u8(a)) end
     return table.concat(t)
 end
 
@@ -107,7 +115,7 @@ core_subs[#core_subs + 1] = emu.add_machine_frame_notifier(guard("frame", functi
     done = true
 
     for _, r in ipairs(ranges(os.getenv("CORE_READ"))) do
-        wr(r.name .. ".bin", read_block(r.lo, r.hi))
+        wr(r.name .. ".bin", read_block(r.lo, r.hi, space_of(r)))
     end
     for _, r in ipairs(WTAP) do
         dump_sparse("reg_" .. r.name .. ".bin", regs[r.name], r.hi - r.lo + 1)

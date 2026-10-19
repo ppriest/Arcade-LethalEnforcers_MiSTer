@@ -1,0 +1,3 @@
+rtl/sound/k054539/gx_k054539.sv
+rtl/sound/lethal_k539.sv
+sim/k539_tb/tb_k539.sv

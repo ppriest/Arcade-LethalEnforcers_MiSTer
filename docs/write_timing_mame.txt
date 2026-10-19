@@ -1,0 +1,205 @@
+Video-write sweep, MAME 0.289 (lethal.cpp at dedb5227403), scripts/write_timing.py.
+Attract: --skip 600 --frames 1800. Play: --coin 600 (two coins, Start) --skip 1500 --frames 1800.
+All nine sets. Taps from scripts/mame/regions.json; objregs/objram/vram/palette are in
+:bank4000's space (bank_map offsets). Last section: lethalen in play, one tap per register.
+
+Columns: writes per frame; share in the first 2 lines from vblank start; share in vblank
+(22 lines, 240-261); share in the first 24 lines; then 8-line buckets from vblank start
+(' ' none, '.' <1%, 0-9 tenths, '#' >90%).
+
+Reading:
+- objram (053245 sprite RAM): never written in vblank, any set, attract or play.
+- objregs (053244 registers): 99.9% in vblank. Register 6 is the DMA that copies sprite RAM
+  into the chip's buffer (k053244_k053245.cpp line 251). Snapshot point: that DMA.
+- vram: written all frame (13-17% in vblank in attract, 44-51% in play). Read live per line.
+- tilemap scroll registers 0x4022-0x402e: 97.9% in vblank; the rest are single writes
+  ('.' buckets). 0x4032 (CPU page select) and 0x40dc (ROM bank) steer CPU access only.
+- palette RAM: 74-92% in vblank. Palette banks PCU1-3: ~92% in vblank.
+
+==== ATTRACT
+lethalen_attract: 262 lines, vblank start 240 (22 lines of vblank), 1800 frames
+  region      /frame  +0..1 vblank +0..23  from vblank start, 8 lines a column
+  objram        43.9   0.0%   0.0%   0.0%  |       110000000110.....  ....   |
+  vregs         20.2   5.0%  95.6%  96.5%  |8000........ .. ......... .. ..  |
+  control        2.4   0.0%  92.2%  92.2%  |#..    0.0....     . .    ...    |
+  objregs        4.0   0.0%  99.9%  99.9%  |#.                   .           |
+  vram          75.3   0.1%  14.8%  16.8%  |001100000000000000000000000000000|
+  palette        5.7   0.0%  77.5%  77.8%  |700000000000000000000.           |
+
+lethalenub_attract: 262 lines, vblank start 240 (22 lines of vblank), 1800 frames
+  region      /frame  +0..1 vblank +0..23  from vblank start, 8 lines a column
+  objram        92.9   0.0%   0.0%   0.0%  |       0000000000000000000...... |
+  vregs         21.4   4.7%  92.1%  93.1%  |80000....... .. ................ |
+  control        2.6   0.0%  88.3%  88.3%  |8..    0.00....... . .    ...    |
+  objregs        4.0   0.0%  99.9%  99.9%  |#.                   .           |
+  vram          89.6   0.1%  13.6%  15.3%  |000110000000000000000000000000000|
+  palette        6.0   0.0%  78.6%  78.9%  |700000000000000000000.           |
+
+lethalenua_attract: 262 lines, vblank start 240 (22 lines of vblank), 1800 frames
+  region      /frame  +0..1 vblank +0..23  from vblank start, 8 lines a column
+  objram       105.2   0.0%   0.0%   0.0%  |       00000000001000000.......  |
+  vregs         21.7   4.6%  90.9%  92.1%  |80000....... .  ...............  |
+  control        2.6   0.2%  86.9%  86.9%  |8.     0.00. .. .  . .    ...    |
+  objregs        4.0   0.0%  99.9%  99.9%  |#.                   .           |
+  vram          94.1   0.1%  12.8%  14.4%  |000110000000000000000000000000000|
+  palette        6.1   0.0%  79.1%  79.4%  |700000000000000000000.           |
+
+lethalenux_attract: 262 lines, vblank start 240 (22 lines of vblank), 1800 frames
+  region      /frame  +0..1 vblank +0..23  from vblank start, 8 lines a column
+  objram       104.2   0.0%   0.0%   0.0%  |       000000000110000000......  |
+  vregs         21.7   4.6%  91.1%  92.3%  |71000.......  . ...............  |
+  control        2.3   0.0%  99.5%  99.5%  |#.     . .         . .     .     |
+  objregs        3.0   0.0%  99.9%  99.9%  |#0.                   .          |
+  vram          94.7   0.1%  13.9%  15.5%  |000110000000000000000000000000000|
+  palette        5.0   0.0%  74.3%  74.7%  |6000000000000000000000           |
+
+lethaleneae_attract: 262 lines, vblank start 240 (22 lines of vblank), 1800 frames
+  region      /frame  +0..1 vblank +0..23  from vblank start, 8 lines a column
+  objram       191.5   0.0%   0.0%   0.0%  |       0000000000000000000...... |
+  vregs         23.6   4.2%  86.4%  87.3%  |71000.......  . ................ |
+  control        2.9   0.0%  82.0%  82.0%  |8..    0.000...... . .    ...    |
+  objregs        4.0   0.0%  99.9%  99.9%  |#.                   .           |
+  vram          97.1   0.1%  12.9%  14.4%  |00012000000000000000000000000000.|
+  palette        6.2   0.0%  79.4%  79.6%  |700000000000000000000.           |
+
+lethalenead_attract: 262 lines, vblank start 240 (22 lines of vblank), 1800 frames
+  region      /frame  +0..1 vblank +0..23  from vblank start, 8 lines a column
+  objram       174.0   0.0%   0.0%   0.0%  |       0000000000000000000...... |
+  vregs         23.3   4.3%  87.4%  88.4%  |71000.......  . ................ |
+  control        2.8   0.0%  83.1%  83.1%  |8..    0.000...... . .    ...    |
+  objregs        4.0   0.0%  99.9%  99.9%  |#.                   .           |
+  vram          92.8   0.1%  13.5%  15.1%  |00112000000000000000000000000000.|
+  palette        6.2   0.0%  79.4%  79.6%  |700000000000000000000.           |
+
+lethaleneab_attract: 262 lines, vblank start 240 (22 lines of vblank), 1800 frames
+  region      /frame  +0..1 vblank +0..23  from vblank start, 8 lines a column
+  objram       174.0   0.0%   0.0%   0.0%  |       0000000000000000000...... |
+  vregs         23.3   4.3%  87.4%  88.4%  |71000.......  . ................ |
+  control        2.8   0.0%  83.1%  83.1%  |8..    0.000...... . .    ...    |
+  objregs        4.0   0.0%  99.9%  99.9%  |#.                   .           |
+  vram          92.8   0.1%  13.5%  15.1%  |00112000000000000000000000000000.|
+  palette        6.2   0.0%  79.4%  79.6%  |700000000000000000000.           |
+
+lethaleneaa_attract: 262 lines, vblank start 240 (22 lines of vblank), 1800 frames
+  region      /frame  +0..1 vblank +0..23  from vblank start, 8 lines a column
+  objram       174.0   0.0%   0.0%   0.0%  |       0000000000000000000...... |
+  vregs         23.3   4.3%  87.4%  88.4%  |71000.......  . ................ |
+  control        2.8   0.0%  83.1%  83.1%  |8..    0.000...... . .    ...    |
+  objregs        4.0   0.0%  99.9%  99.9%  |#.                   .           |
+  vram          94.5   0.1%  13.3%  14.8%  |00012000000000000000000000000000.|
+  palette        6.2   0.0%  79.4%  79.6%  |700000000000000000000.           |
+
+lethalenj_attract: 262 lines, vblank start 240 (22 lines of vblank), 1800 frames
+  region      /frame  +0..1 vblank +0..23  from vblank start, 8 lines a column
+  objram        34.6   0.0%   0.0%   0.0%  |      .0111120........         ..|
+  vregs         19.8  10.0%  98.8%  98.8%  |#00...............  . . ....    .|
+  control        2.5   0.7%  92.3%  92.3%  |#.    .0....    .       .      ..|
+  objregs        4.0   0.0%  99.9%  99.9%  |#       .                        |
+  vram          62.8   0.2%  14.4%  15.4%  |000000000000000000000000000000000|
+  palette        4.5   0.0%  92.1%  92.5%  |80000000..                       |
+
+
+==== PLAY
+lethalen_play (coin at frame 600): 262 lines, vblank start 240 (22 lines of vblank), 1800 frames
+  region      /frame  +0..1 vblank +0..23  from vblank start, 8 lines a column
+  objram       226.9   0.0%   0.0%   0.0%  |..    .10110110000...............|
+  vregs         24.8   4.0%  95.6%  95.7%  |5300..   ....0................   |
+  control        3.6   0.1%  63.4%  63.5%  |50.0..01..0......00..............|
+  objregs        4.0   0.0%  99.9%  99.9%  |#.                 .             |
+  vram          88.0   0.0%  48.8%  50.9%  |2100000000000....................|
+  palette        5.9   0.0%  80.6%  80.9%  |7000000000000000000.             |
+
+lethalenub_play (coin at frame 600): 262 lines, vblank start 240 (22 lines of vblank), 1800 frames
+  region      /frame  +0..1 vblank +0..23  from vblank start, 8 lines a column
+  objram       161.1   0.0%   0.0%   0.0%  |      .1011010000.............   |
+  vregs         23.4   4.3%  96.8%  96.8%  |6200..   .....................   |
+  control        3.4   0.1%  66.1%  66.3%  |60.00000..000....000....00....00.|
+  objregs        4.0   0.0%  99.9%  99.9%  |#.                 .             |
+  vram          72.5   0.0%  44.3%  46.5%  |2100000000000....................|
+  palette        5.7   0.0%  80.2%  80.5%  |7000000000000000000.             |
+
+lethalenua_play (coin at frame 600): 262 lines, vblank start 240 (22 lines of vblank), 1800 frames
+  region      /frame  +0..1 vblank +0..23  from vblank start, 8 lines a column
+  objram       160.0   0.0%   0.0%   0.0%  |      .10110100000.............  |
+  vregs         23.4   4.3%  96.8%  96.8%  |6200..   ......................  |
+  control        3.4   0.3%  66.1%  66.3%  |60.00000..000....000....00....00.|
+  objregs        4.0   0.0%  99.9%  99.9%  |#.                 .             |
+  vram          72.6   0.0%  44.5%  46.7%  |2100000000000....................|
+  palette        5.7   0.0%  80.2%  80.5%  |7000000000000000000.             |
+
+lethalenux_play (coin at frame 600): 262 lines, vblank start 240 (22 lines of vblank), 1800 frames
+  region      /frame  +0..1 vblank +0..23  from vblank start, 8 lines a column
+  objram       198.1   0.0%   0.0%   0.0%  |.     .10110110000...............|
+  vregs         24.1   4.1%  95.5%  95.6%  |6200..  .....................    |
+  control        3.1   0.1%  73.9%  74.0%  |60.000....000....000....00....00.|
+  objregs        3.0   0.0%  97.6%  97.6%  |63.0      .        .             |
+  vram          74.9   0.0%  47.2%  49.9%  |21000000000...00....0............|
+  palette        4.8   0.0%  76.3%  76.7%  |6000000000000000000.             |
+
+lethaleneae_play (coin at frame 600): 262 lines, vblank start 240 (22 lines of vblank), 1800 frames
+  region      /frame  +0..1 vblank +0..23  from vblank start, 8 lines a column
+  objram       226.9   0.0%   0.0%   0.0%  |..    .10110110000...............|
+  vregs         24.8   4.0%  95.6%  95.7%  |5300..   ....0................   |
+  control        3.6   0.1%  63.4%  63.5%  |50.0..01..0......00..............|
+  objregs        4.0   0.0%  99.9%  99.9%  |#.                 .             |
+  vram          88.0   0.0%  48.9%  51.0%  |2100000000000....................|
+  palette        5.9   0.0%  80.6%  80.9%  |7000000000000000000.             |
+
+lethalenead_play (coin at frame 600): 262 lines, vblank start 240 (22 lines of vblank), 1800 frames
+  region      /frame  +0..1 vblank +0..23  from vblank start, 8 lines a column
+  objram       226.9   0.0%   0.0%   0.0%  |..    .10110110000...............|
+  vregs         24.8   4.0%  95.6%  95.7%  |5300..   ....0................   |
+  control        3.6   0.1%  63.4%  63.5%  |50.0..01.00......00..............|
+  objregs        4.0   0.0%  99.9%  99.9%  |#.                 .             |
+  vram          88.0   0.0%  48.9%  51.0%  |2100000000000....................|
+  palette        5.9   0.0%  80.6%  80.9%  |7000000000000000000.             |
+
+lethaleneab_play (coin at frame 600): 262 lines, vblank start 240 (22 lines of vblank), 1800 frames
+  region      /frame  +0..1 vblank +0..23  from vblank start, 8 lines a column
+  objram       226.9   0.0%   0.0%   0.0%  |..    .10110110000...............|
+  vregs         24.8   4.0%  95.6%  95.7%  |5300..   ....0................   |
+  control        3.6   0.1%  63.4%  63.5%  |50.0..01.00......00..............|
+  objregs        4.0   0.0%  99.9%  99.9%  |#.                 .             |
+  vram          87.9   0.0%  48.9%  51.0%  |2100000000000....................|
+  palette        5.9   0.0%  80.6%  80.9%  |7000000000000000000.             |
+
+lethaleneaa_play (coin at frame 600): 262 lines, vblank start 240 (22 lines of vblank), 1800 frames
+  region      /frame  +0..1 vblank +0..23  from vblank start, 8 lines a column
+  objram       227.8   0.0%   0.0%   0.0%  |..    .10110110000...............|
+  vregs         24.7   4.0%  95.6%  95.6%  |5300... .....0..............     |
+  control        3.6   0.1%  63.4%  63.5%  |50.0..01.00.....00...............|
+  objregs        4.0   0.0%  99.9%  99.9%  |#.                 .             |
+  vram          88.8   0.0%  48.8%  51.0%  |210000000000.....................|
+  palette        5.9   0.0%  80.7%  80.9%  |7000000000000000000.             |
+
+lethalenj_play (coin at frame 600): 262 lines, vblank start 240 (22 lines of vblank), 1800 frames
+  region      /frame  +0..1 vblank +0..23  from vblank start, 8 lines a column
+  objram       225.9   0.0%   0.0%   0.0%  |      .10111110000.........      |
+  vregs         24.9   7.9%  95.8%  95.9%  |5300..   ...................     |
+  control        3.7   0.7%  63.1%  63.2%  |50.0...1.00......0...............|
+  objregs        4.0   0.0%  99.9%  99.9%  |#.                 .             |
+  vram          80.1   0.0%  50.9%  53.1%  |310000000000.....................|
+  palette        5.8   0.0%  80.4%  80.7%  |7000000000000000000.             |
+
+
+==== PLAY, lethalen, one tap per register
+lethalen_play_split: 262 lines, vblank start 240 (22 lines of vblank), 1800 frames
+  region      /frame  +0..1 vblank +0..23  from vblank start, 8 lines a column
+  r4000          3.3   0.0%  97.3%  97.3%  |5310..   ...... .. .. .          |
+  r4006          2.0  50.0% 100.0% 100.0%  |#                                |
+  r400a          0.0   0.0%   0.0%   0.0%  |                    #            |
+  r400c          1.0   0.0% 100.0% 100.0%  |#                                |
+  r4022          2.0   0.0%  97.9%  97.9%  |54.0.     .        .             |
+  r4024          2.0   0.0%  97.9%  97.9%  |54.0.     .        .             |
+  r4026          2.0   0.0%  97.9%  97.9%  |54.0.     .        .             |
+  r402a          2.0   0.0%  97.9%  97.9%  |54.0.     .        .             |
+  r402c          2.0   0.0%  97.9%  97.9%  |54.0.     .        .             |
+  r402e          2.0   0.0%  97.9%  97.9%  |54.0.     .        .             |
+  r4032          5.5   0.0%  86.5%  86.6%  |2320..   ....0...0............   |
+  r4040          1.0   0.0%  99.9%  99.9%  |#.                 .             |
+  c40c4          3.5   0.1%  62.0%  62.2%  |50..0001.0000...000.....00.....0.|
+  pcu1           0.1   0.0%  91.8%  91.8%  |1700      0        0             |
+  pcu2           0.1   0.0%  91.8%  91.8%  |1700      0        0             |
+  pcu3           0.1   0.0%  92.7%  92.7%  |1800      0                      |
+  rbank          4.4   0.0%  51.8%  51.9%  |220.0..0100000............   ..  |
+

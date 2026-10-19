@@ -57,7 +57,7 @@ Steps for a release:
    shows this build's date and the right MRA count. Files in `unsupported/` and `_dev/` are not
    published, so keep work in progress there.
 
-**Current state:** <one line: what the latest build passes or fails, with the number>.
+**Current state:** `Arcade-LethalEnforcers_20261019.rbf`, the release revision at `059ad5e`, passes the timing gate (worst setup +0.511 ns, framework HDMI clock; `clk_sys` +3.634 ns); not yet run on hardware.
 
 ## Submitting the core upstream
 

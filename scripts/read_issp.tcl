@@ -17,8 +17,21 @@
 # (signed 16), hex or bit. Bit numbers index the probe bus as the RTL
 # concatenates it. Add an entry to the `switch` further down for each table.
 # By convention source bit 0 pulsed is the counter clear.
+# Instance F: LethalEnforcers.sv, at the issp_probe instance.
 set fields_F {
     {frames           0  15 dec}
+    {tile_lost       16  31 dec}
+    {tile_unsup      32  32 bit}
+    {rom_loaded      33  33 bit}
+    {ldr_busy        34  34 bit}
+    {pause_cpu       35  35 bit}
+    {sdram_init      36  36 bit}
+    {rst_board       37  37 bit}
+    {nv_changed      38  38 bit}
+    {mod_byte        40  47 hex}
+    {dip_byte        48  55 hex}
+    {ldr_cycles      56  79 dec}
+    {snd_ovr         80  95 dec}
     {pll_locked     127 127 bit}
 }
 # ---------------------------------------------------------------------------

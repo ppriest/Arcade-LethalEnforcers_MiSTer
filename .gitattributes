@@ -1,2 +1,23 @@
 scripts/hooks/* text eol=lf
 *.sh text eol=lf
+
+# Vendored source is stored byte-for-byte, so "verbatim at <commit>" stays checkable.
+rtl/jtframe/** -text
+rtl/cpu/mc6809/** -text
+rtl/cpu/t80/** -text
+rtl/video/jt05415x/** -text
+rtl/video/jt053244/** -text
+rtl/misc/jtk054000/** -text
+rtl/misc/jt5911/** -text
+rtl/sound/jt054321/** -text
+rtl/sound/k054539/** -text
+rtl/io/** -text
+rtl/memory/** -text
+rtl/video/crt/** -text
+rtl/debug/** -text
+tools/jtframe/src/** -text
+sim/jtframe_ver/** -text
+rtl/video/reference/*_upstream_reference.sv -text
+rtl/video/reference/*_upstream_reference.v -text
+rtl/hiscore/** -text
+rtl/video/rotate/** -text

@@ -64,7 +64,9 @@ GENERIC_BUTTON = re.compile(r'^(button|btn|b|fire|action)\s*\d+$', re.I)
 BUTTON_EXEMPT = {'start', 'coin', 'pause', 'service', 'test', 'tilt', '-', ''}
 
 ROT_TAG = {"ROT0": "horizontal", "ROT90": "vertical (cw)", "ROT180": "horizontal",
-           "ROT270": "vertical (ccw)"}
+           "ROT270": "vertical (ccw)",
+           # a mirrored horizontal screen: the core mirrors it, the display stays horizontal
+           "ORIENTATION_FLIP_X": "horizontal", "ORIENTATION_FLIP_Y": "horizontal"}
 
 # Elements whose text content is meaningful and must not be flagged.
 TEXT_OK = {'part', 'name', 'setname', 'year', 'manufacturer', 'category',
@@ -79,7 +81,7 @@ def driver_rotations():
         return None
     out = {}
     text = Path(src).read_text(encoding="utf8", errors="replace")
-    for m in re.finditer(r'^GAMEL?\(\s*\d+,\s*(\w+),.*?,\s*(ROT\d+)\b', text, re.M):
+    for m in re.finditer(r'^GAMEL?\(\s*\d+,\s*(\w+),.*?,\s*(ROT\d+|ORIENTATION_FLIP_[XY])\b', text, re.M):
         out[m.group(1)] = ROT_TAG.get(m.group(2))
     return out
 

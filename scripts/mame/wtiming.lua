@@ -3,7 +3,9 @@
 --   CORE_CPU, CORE_SPACE  the CPU and address space to tap (regions.json)
 --   WT_IN_COIN/START/HOLD/PULSE  input field names (regions.json "inputs")
 --   WT_OUT     output file
---   WT_TAPS    "name:hexlo:hexhi,..." regions to count
+--   WT_TAPS    "name:hexlo:hexhi[@device],..." regions to count; @device taps that
+--              device's program space (a bank device) instead of CORE_CPU's
+--   WT_COINS   coins to insert before Start (default 1)
 --   WT_SKIP    frames to run before counting (boot)
 --   WT_FRAMES  frames to count
 --   WT_COIN    frame to insert a coin and then press Start (0 = attract only);
@@ -18,6 +20,7 @@ local TAPS   = os.getenv("WT_TAPS") or ""
 local SKIP   = tonumber(os.getenv("WT_SKIP") or "600")
 local FRAMES = tonumber(os.getenv("WT_FRAMES") or "1200")
 local COIN   = tonumber(os.getenv("WT_COIN") or "0")
+local COINS  = tonumber(os.getenv("WT_COINS") or "1")
 
 local mach = manager.machine
 local cpu  = mach.devices[os.getenv("CORE_CPU") or ":maincpu"]
@@ -54,12 +57,18 @@ local counting = false
 local frame_last = {}
 _G.__wt_taps = {}
 for _, spec in ipairs(split(TAPS, ",")) do
-    local f = split(spec, ":")
+    local body, dev = spec:match("^([^@]+)@?(.*)$")
+    local f = split(body, ":")
     local name, lo, hi = f[1], tonumber(f[2], 16), tonumber(f[3], 16)
+    local sp = prog
+    if dev ~= "" then
+        assert(mach.devices[dev], "no device " .. dev)
+        sp = mach.devices[dev].spaces["program"]
+    end
     names[#names + 1] = name
     hist[name] = {}
     lastl[name] = {}
-    local tap = prog:install_write_tap(lo, hi, "wt_" .. name, function(offset, data, mask)
+    local tap = sp:install_write_tap(lo, hi, "wt_" .. name, function(offset, data, mask)
         if counting then
             local l = cur_line()
             hist[name][l] = (hist[name][l] or 0) + 1
@@ -84,9 +93,11 @@ local n = 0
 emu.register_frame_done(function()
     n = n + 1
     if COIN > 0 and f_coin and f_start then
-        f_coin:set_value((n >= COIN and n < COIN + 6) and 1 or 0)
-        f_start:set_value((n >= COIN + 90 and n < COIN + 96) and 1 or 0)
-        if n >= COIN + 96 then
+        local k = n - COIN
+        f_coin:set_value((k >= 0 and k < 20 * COINS and k % 20 < 6) and 1 or 0)
+        local st = 20 * COINS + 70
+        f_start:set_value((k >= st and k < st + 6) and 1 or 0)
+        if k >= st + 6 then
             if f_right then f_right:set_value(1) end
             if f_b1 then f_b1:set_value((n % 20) < 4 and 1 or 0) end
         end

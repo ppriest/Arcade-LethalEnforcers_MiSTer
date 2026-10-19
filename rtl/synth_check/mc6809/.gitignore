@@ -1,0 +1,11 @@
+db/
+incremental_db/
+output_files/
+*.rpt
+*.summary
+*.qws
+compile.log
+worst.log
+worst_paths.txt
+c5_pin_model_dump.txt
+*.qws

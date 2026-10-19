@@ -1244,6 +1244,7 @@ ack address that is also an input port must acknowledge on writes only.
 
 ## Tooling and workflow (Quartus, ModelSim, Verilator, and the shell around them)
 
+- **[LethalEnforcers] Vendor from a clone made with `core.autocrlf=false`, and compare against `git show <commit>:<path>`.** A `-text` line keeps the copy's bytes from then on, but the copy itself came from a Windows checkout that had already turned LF into CRLF: 36 of 38 files from jtcores differed from their upstream blobs. jtframe's `mmr` generator reads its template from the same checkout, so its output inherited the CRLF too, and a check against the converted working tree still passed. Clone with `git -c core.autocrlf=false clone`, then compare every vendored file to its blob before committing.
 - **Working directory does not reliably persist into backgrounded commands.** `cd <project> &&
   <tool>` in one line, or put the `cd` in the Tcl. Symptoms: `Error (23018): Tcl Script File ... not
   found`, `Error (12007): Top-level design entity ... is undefined`.

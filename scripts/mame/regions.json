@@ -1,57 +1,95 @@
 {
-  "_comment": "Core-specific. The main CPU's view of the machine, from the MAME driver's address map. Read by mame_capture.py and write_timing.py. Addresses are hex strings, inclusive.",
+  "_comment": "Main CPU view from lethal.cpp main_map. Video memory sits behind the bank4000 window (CBNK, 0x40c4 bit 4); a third element names the device whose program space holds the range, so ':bank4000' offsets are bank_map addresses: CBNK=0 at 0x0000-0x3fff, CBNK=1 at 0x4000-0x7fff.",
   "cpu": ":maincpu",
   "space": "program",
-  "bus_bytes": 2,
+  "bus_bytes": 1,
   "big_endian": true,
   "read": {
     "workram": [
-      "0x000000",
-      "0x00ffff"
+      "0x2000",
+      "0x3fff"
+    ],
+    "objram": [
+      "0x1000",
+      "0x17ff",
+      ":bank4000"
     ]
   },
   "wtap": {
     "vregs": [
-      "0x000000",
-      "0x00001f"
+      "0x4000",
+      "0x404f"
+    ],
+    "control": [
+      "0x40c4",
+      "0x40d0"
+    ],
+    "objregs": [
+      "0x0840",
+      "0x084f",
+      ":bank4000"
+    ],
+    "objram": [
+      "0x1000",
+      "0x17ff",
+      ":bank4000"
+    ],
+    "vram": [
+      "0x2000",
+      "0x3fff",
+      ":bank4000"
+    ],
+    "palette": [
+      "0x4400",
+      "0x7fff",
+      ":bank4000"
     ]
   },
   "sweep": [
-    "workram",
-    "vregs"
+    "vregs",
+    "control",
+    "objregs",
+    "objram",
+    "vram",
+    "palette"
   ],
   "trace": {
-    "addr_hi": "0xffffff",
+    "addr_hi": "0xffff",
     "io": [
-      "0x000000",
-      "0x000000"
+      "0x4000",
+      "0x7fff"
     ],
     "vectors": [
-      "0x000000",
-      "0x000000"
+      "0xfff0",
+      "0xffff"
     ],
     "ipl": {
-      "reg": "SR",
-      "shift": 8,
-      "mask": 7
+      "reg": "CC",
+      "shift": 4,
+      "mask": 1
     },
     "rom": [
       [
-        "0x000000",
-        "0x0fffff"
+        "0x0000",
+        "0x1fff"
+      ],
+      [
+        "0x8000",
+        "0xffff"
       ]
     ],
     "ram": [
       [
-        "0x100000",
-        "0x10ffff"
+        "0x2000",
+        "0x3fff"
       ]
     ]
   },
   "inputs": {
     "coin": "Coin 1",
     "start": "1 Player Start",
-    "hold": "P1 Right",
-    "pulse": "P1 Button 1"
+    "hold": "P1 Button 1",
+    "pulse": "P1 Button 1",
+    "coins": 2
   }
 }
