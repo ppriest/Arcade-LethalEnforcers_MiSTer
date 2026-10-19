@@ -87,13 +87,13 @@ The release revision at `059ad5e`, fitted 19 October 2026. Per-block counts are 
 
 ## Screenshots
 
-### Lethal Enforcers (ver UAE)
-
-![lethalen attract](docs/screenshots/lethalen/attract.png)
-
 ### Lethal Enforcers (ver JAD)
 
-![lethalenj attract](docs/screenshots/lethalenj/attract.png)
+![lethalenj title](docs/screenshots/lethalenj/20261019_222634-screen.png)
+![lethalenj game over in attract](docs/screenshots/lethalenj/20261019_222655-screen.png)
+![lethalenj target practice](docs/screenshots/lethalenj/20261019_222816-screen.png)
+![lethalenj airport stage](docs/screenshots/lethalenj/20261019_222930-screen.png)
+![lethalenj airport stage, an enemy shot](docs/screenshots/lethalenj/20261019_222938-screen.png)
 
 ## Installation
 
