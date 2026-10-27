@@ -10,8 +10,8 @@
 //
 // Forked from gx_guns.sv (rtl/io/PROVENANCE.md): the aim (stick, d-pad, mouse), the
 // reload and the crosshair are its. Its held position (vx, vy) is in screen space, 0 at
-// the top left, and the port's v is that position: on the FLIP_Y sets the game's Y
-// falls as the port rises and the flip turns that into screen-down. Measured on the
+// the top left, and the port's v is that position. On the FLIP_Y sets the game's Y
+// falls as the port rises, and the flip turns that into screen-down. Measured on the
 // board: with ~vy the shots landed mirrored in Y about the crosshair, X matching.
 // Reload holds the trigger with v at an off-screen Y.
 //
@@ -42,8 +42,7 @@ module lethal_guns (
     output reg [23:0] rgb_out
 );
 
-// the inputs, registered here: hps_io drives them from clk_sys, 96 MHz from
-// the same PLL as clk
+// the inputs, registered here: hps_io drives them from clk_sys, the same clock
 reg  [31:0] j [0:1];
 reg  [15:0] a [0:1];
 reg  [24:0] ms;

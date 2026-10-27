@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: GPL-3.0-or-later
 -- hiscore.dat's ranges, read each frame from power-on: prints "HS <frame> <hex>" whenever
 -- they change, then exits at CORE_FRAMES. scripts/hs_ready.py drives it.
 local ranges = {}

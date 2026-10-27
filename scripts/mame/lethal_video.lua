@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: GPL-3.0-or-later
 -- Capture Lethal Enforcers' video state at a frame, for scripts/render_model.py.
 -- Driven by scripts/lethal_capture.py.
 --

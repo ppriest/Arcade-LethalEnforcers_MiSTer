@@ -322,7 +322,7 @@ lethal_sdram #(.SHIFTED(1)) u_sdram (
 
 ///////////////////////   INPUTS   ///////////////////////////////
 
-// Pause: joystick bit 12, either pad, toggles; it holds the 6809, the video runs on
+// Pause: joystick bit 12, either pad, toggles; it holds the 6809; the video runs on
 wire pause_btn = joystick_0[12] | joystick_1[12];
 reg  pause_btn_d = 1'b0, pause_cpu = 1'b0;
 always @(posedge clk_sys) begin
@@ -444,8 +444,9 @@ lethal_guns u_guns (
 	.rgb_in(rgb), .rgb_out(rgb_x)
 );
 
-// CRT Adjust (rtl/video/crt): the OSD stores list indices; H-Position's 97 wrap at 97.
-// H-Size is held at 0 while the scandoubler or its effects are on.
+// CRT Adjust (rtl/video/crt): the OSD stores list indices; H-Position has 97 entries
+// (0, +1..+48, -48..-1), so its negative half wraps at 97, not 128. H-Size is held
+// at 0 while the scandoubler or its effects are on.
 wire              crt_on      = status[75];
 wire              crt_scale   = ~(forced_scandoubler | |status[46:44]);
 wire        [6:0] crt_hpos_ix = status[82:76];

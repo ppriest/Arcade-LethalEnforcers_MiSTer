@@ -57,6 +57,11 @@ The notice is in the header of each `rtl/cpu/t80/T80*.vhd` file: Copyright (c) 2
 Wallner, Copyright (c) 2018 Sorgelig, redistribution in source and synthesised forms permitted with
 the notice retained.
 
+## MiSTer-devel/Template_MiSTer - GPL-2.0-or-later (`sys/`)
+
+The framework, unmodified, pinned at `5dda373` (57 files, byte-identical to upstream). Its grant is
+"or later", which is what lets it combine with GPL-3 code.
+
 ## Release checklist
 
 - The README credits each component above.

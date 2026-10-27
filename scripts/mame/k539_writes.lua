@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: GPL-3.0-or-later
 -- The Z80's writes to the 054539 (0xf800-0xfa2f) and its reads of 0x22d, from power-on:
 -- "W <sample> <reg> <data>", "R <sample> 22d 00", <sample> the 48 kHz sample index
 -- (machine time * 48000). Exits at CORE_FRAMES. Coins and Start as audio_play.lua

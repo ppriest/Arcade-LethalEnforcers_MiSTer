@@ -247,8 +247,8 @@ wire nb_take  = nb_valid && (!e_valid || tile_end);
 wire nb_free  = !nb_valid || nb_take;
 
 // ------------------------------------------------------ VRAM, line buffers ---
-// 5 pages x 2048 entries x { attr, code }, as four byte-lane RAMs of 10K x 8
-// (16K deep). One read port shared by the CPU and the renderer.
+// 5 pages x 2048 entries x { attr, code }, as four byte-lane RAMs of 16K x 8
+// (10K entries used). One read port shared by the CPU and the renderer.
 // The renderer's map page is ((rowstart + my / 256) & 3) * 4 + ((colstart + mx / 512) & 3).
 wire [ 3:0] map_page  = { 2'(rowstart + my[9:8]), 2'(colstart + fmx[10:9]) };
 wire [ 3:0] map_pp    = ppage_of(map_page);
@@ -335,7 +335,7 @@ always @(posedge clk) begin
                 unsupported <= 1'b1;
             st       <= MOD_Y;
         end
-        // |ydiff| mod height by restoring subtraction of height << 7..0
+        // |ydiff| mod height by repeated subtraction, height << 7 down to height
         MOD_Y: begin
             if (modv >= (20'(height) << modk)) modv <= modv - (20'(height) << modk);
             modk <= modk - 3'd1;

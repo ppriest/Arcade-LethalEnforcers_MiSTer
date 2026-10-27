@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: GPL-3.0-or-later
 -- Coins and Start for an audio capture, as lethal_video.lua's LC_COIN sequence without
 -- the firing: two coins from frame LC_COIN (6 frames each, 20 apart), Start 110 frames
 -- after. Exits at CORE_FRAMES. scripts/audio_capture.py drives it with -wavwrite.

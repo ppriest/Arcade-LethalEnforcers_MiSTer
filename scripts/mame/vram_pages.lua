@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: GPL-3.0-or-later
 -- Which K056832 VRAM pages Lethal Enforcers writes, and how far into each.
 -- Driven by scripts/mame_vram_pages.py.
 --

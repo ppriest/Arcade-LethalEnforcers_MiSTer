@@ -7,7 +7,7 @@ module  pll_0002(
 	// interface 'reset'
 	input wire rst,
 
-	// interface 'outclk0' -- clk_sys, 48 MHz: 8 x the 6 MHz pixel clock, 3 x the 68000's 16 MHz
+	// interface 'outclk0' -- clk_sys, 48 MHz: 8 x the 6 MHz pixel clock, 4 x the 6809's 12 MHz
 	// (docs/ROADMAP.md, Clocks)
 	output wire outclk_0,
 

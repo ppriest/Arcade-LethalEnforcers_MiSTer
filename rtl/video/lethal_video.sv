@@ -155,6 +155,8 @@ lethal_obj #(.HFIX(0)) u_obj (
     .rd_x       ( {1'b0, x_bmp} + OBJ_DX ),
     .vrender    ( obj_v         ),
     .hs         ( obj_hs        ),
+    // lvbl is high over the visible lines; jt053244's DMA triggers two lines
+    // after its fall
     .lvbl       ( ~(L < 9'd16 || L > 9'd239) ),
     .ram_we     ( objram_we     ),
     .ram_addr   ( objram_addr   ),
@@ -192,7 +194,7 @@ lethal_mixer u_mix (
     .rgb        ( mix_rgb       )
 );
 
-// blanking and syncs, delayed to match: rgb for pixel X is out three pixels later
+// blanking and syncs, delayed to match: rgb for pixel X is out two pixels later
 reg [3:0] hb_sh, vb_sh, hs_sh, vs_sh;
 always @(posedge clk) begin
     vblank_irq <= ce_pix && X == 9'd0 && L == 9'd240;
