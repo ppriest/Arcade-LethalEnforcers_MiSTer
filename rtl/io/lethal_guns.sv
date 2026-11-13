@@ -82,7 +82,9 @@ integer g;
 always @(posedge clk) begin
     for( g=0; g<2; g=g+1 ) begin
         ax = a[g][7:0]; ay = a[g][15:8];
-        lx = mag(ax) >= DEAD; ly = mag(ay) >= DEAD;
+        // Aim (a light gun) follows the axis everywhere: a dead zone would hold a stale aim
+        // whenever the gun points near the middle of either axis
+        lx = mag(ax) >= DEAD || mode[g] == 2'd1; ly = mag(ay) >= DEAD || mode[g] == 2'd1;
         sx = mode[g] == 2'd2 ? lx : mode[g] == 2'd1 ? 1'b0 : mag(ax) >= FULL;
         sy = mode[g] == 2'd2 ? ly : mode[g] == 2'd1 ? 1'b0 : mag(ay) >= FULL;
         dir = { j[g][3] | (ay[7] & sy), j[g][2] | (!ay[7] & sy),
