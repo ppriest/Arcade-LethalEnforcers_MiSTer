@@ -35,6 +35,7 @@ module lethal_guns (
 
     // the crosshair
     input             show,
+    input       [1:0] border,      // Sinden border: 0 Off, 1/2/3 = 2/4/8 px white round the picture
     input             pxl_cen,
     input             lhbl,
     input             lvbl,
@@ -81,7 +82,9 @@ integer g;
 always @(posedge clk) begin
     for( g=0; g<2; g=g+1 ) begin
         ax = a[g][7:0]; ay = a[g][15:8];
-        lx = mag(ax) >= DEAD; ly = mag(ay) >= DEAD;
+        // Aim (a light gun) follows the axis everywhere: a dead zone would hold a stale aim
+        // whenever the gun points near the middle of either axis
+        lx = mag(ax) >= DEAD || mode[g] == 2'd1; ly = mag(ay) >= DEAD || mode[g] == 2'd1;
         sx = mode[g] == 2'd2 ? lx : mode[g] == 2'd1 ? 1'b0 : mag(ax) >= FULL;
         sy = mode[g] == 2'd2 ? ly : mode[g] == 2'd1 ? 1'b0 : mag(ay) >= FULL;
         dir = { j[g][3] | (ay[7] & sy), j[g][2] | (!ay[7] & sy),
@@ -140,12 +143,25 @@ end
 // ---------------------------------------------------------- crosshair
 reg  [8:0] hc, vc;
 reg        lhbl_l;
+reg  [8:0] hl = 9'd287, vl = 9'd223, hlast, vlast;   // Sinden border (below)
+reg        lvbl_p;
 always @(posedge clk) if( pxl_cen ) begin
     lhbl_l <= lhbl;
     if( !lvbl ) vc <= 0;
     else if( lhbl_l && !lhbl ) vc <= vc + 9'd1;
     hc <= lhbl ? hc + 9'd1 : 9'd0;
+    // the last column and line drawn, measured, for the Sinden border
+    if( lhbl && lvbl ) begin hlast <= hc; vlast <= vc; end
+    if( lhbl_l && !lhbl ) hl <= hlast;
+    lvbl_p <= lvbl;
+    if( lvbl_p && !lvbl ) vl <= vlast;
 end
+
+// Sinden border: a white frame drawn over the picture's outer pixels (the gun finds the
+// screen by it). hl/vl are the last column/line, so it holds for any raster size.
+reg  [8:0] bwd;
+always @(posedge clk) bwd <= 9'd1 << border;   // 2, 4 or 8 px (0 = Off, gated below)
+wire brd = |border && ( hc < bwd || vc < bwd || hc > hl - bwd || vc > vl - bwd );
 
 wire [7:0] vx0 = vx[0], vx1 = vx[1], vy0 = vy[0], vy1 = vy[1];
 reg  [8:0] cx0, cy0, cx1, cy1;
@@ -172,6 +188,7 @@ always @* begin
         if( c0 ) rgb_out = 24'hff2020;
         else if( c1 ) rgb_out = 24'h20ff20;
     end
+    if( brd && lhbl && lvbl ) rgb_out = 24'hffffff;
 end
 
 endmodule

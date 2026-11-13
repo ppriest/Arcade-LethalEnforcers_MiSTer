@@ -127,7 +127,9 @@ Aiming, per player, from the OSD:
 * the d-pad, two units a frame;
 * the mouse, for the player the OSD gives it: left button fires, right reloads.
 
-The crosshair is on by default.
+The crosshair is on by default. For a Sinden light gun, set the player's stick to Aim and turn on
+Sinden border (Off, 2, 4 or 8 px, as the Model 2 core): a white frame drawn over the edge of the picture, which the gun
+needs to find the screen. 4 px tracks best through the HDMI scaler.
 
 Keyboard, MAME's defaults: arrows / R F D G, buttons LCtrl LAlt Space LShift Z X / A S Q W E,
 Start 1 / 2, Coin 5 / 6; F2 service switch, 9 / 0 service coins, P pause.
