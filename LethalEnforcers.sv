@@ -76,6 +76,8 @@ localparam CONF_STR = {
 	// player -- Auto moves a pushed-full axis as the d-pad does, Aim is absolute
 	// (light guns), D-pad moves on any deflection; the mouse aims for one player
 	"O[68],Crosshair,On,Off;",
+	// a white frame over the picture's edge for a Sinden light gun (lethal_guns)
+	"O[67:66],Sinden border,Off,2 px,4 px,8 px;",
 	"O[70:69],P1 stick,Auto,Aim,D-pad;",
 	"O[72:71],P2 stick,Auto,Aim,D-pad;",
 	"O[74:73],Mouse aims,P1,P2,Off;",
@@ -440,7 +442,7 @@ lethal_guns u_guns (
 	.ana0(joystick_l_analog_0), .ana1(joystick_l_analog_1), .mouse(ps2_mouse),
 	.mode0(status[70:69]), .mode1(status[72:71]), .ms_who(status[74:73]),
 	.rev(gun_rev), .gun, .xlsb(gun_xlsb), .trig(gun_trig),
-	.show(~status[68]), .pxl_cen(ce_pix), .lhbl(~hblank), .lvbl(~vblank),
+	.show(~status[68]), .border(status[67:66]), .pxl_cen(ce_pix), .lhbl(~hblank), .lvbl(~vblank),
 	.rgb_in(rgb), .rgb_out(rgb_x)
 );
 
